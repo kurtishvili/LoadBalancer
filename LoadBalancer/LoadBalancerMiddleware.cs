@@ -3,21 +3,20 @@
     public class LoadBalancerMiddleware
     {
         private readonly RequestDelegate _next;
-        private readonly LoadBalancerService _loadBalancer;
+        private readonly LoadBalancerService _loadBalancerService;
 
-        public LoadBalancerMiddleware(RequestDelegate next, LoadBalancerService loadBalancer)
+        public LoadBalancerMiddleware(RequestDelegate next, LoadBalancerService loadBalancerService)
         {
             _next = next;
-            _loadBalancer = loadBalancer;
+            _loadBalancerService = loadBalancerService;
         }
 
         public async Task InvokeAsync(HttpContext context)
         {
-            var serverUrl = await _loadBalancer.GetNextActiveServerAsync();
+            var server = await _loadBalancerService.GetNextActiveServer();
 
-            context.Response.Redirect(serverUrl);
+            context.Response.Redirect(server);
             await _next(context);
         }
     }
-
 }

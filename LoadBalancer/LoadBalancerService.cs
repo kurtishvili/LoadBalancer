@@ -1,34 +1,49 @@
-﻿namespace LoadBalancer
+﻿using Microsoft.Extensions.Options;
+
+namespace LoadBalancer
 {
     public class LoadBalancerService
     {
-        private readonly IConfiguration _configuration;
+        private readonly LoadBalancerSettings _settings;
         private readonly HttpClient _httpClient;
-        private int _currentIndex = 0;
-        private List<string> server = new List<string> { "http://fb.com", "http://www.linkedin.com/", "http://github.com/" };
+        private int _currentIndex;
+        private List<string> _servers;
+        private readonly object _lock = new();
 
-        public LoadBalancerService(IConfiguration configuration, IHttpClientFactory httpClientFactory)
+        public LoadBalancerService(IOptions<LoadBalancerSettings> options, HttpClient httpClient)
         {
-            _configuration = configuration;
-            _httpClient = httpClientFactory.CreateClient();
-        }   
-        public async Task<string> GetNextActiveServerAsync()
+            _settings = options.Value;
+            _httpClient = httpClient;
+            _currentIndex = _settings.CurrentIndex;
+            _servers = _settings.Servers;
+        }
+
+        public async Task<string> GetNextActiveServer()
         {
             var activeServers = new List<string>();
 
-            foreach (var server in server)
+            foreach (var server in _servers)
             {
                 var response = await _httpClient.GetAsync($"{server}/health");
 
                 if (response.IsSuccessStatusCode)
+                {
                     activeServers.Add(server);
+                }
             }
 
             if (activeServers.Count == 0)
-                throw new InvalidOperationException("No active servers available.");
+            {
+                throw new InvalidOperationException("No active servers available");
+            }
 
-            var selectedServer = activeServers[_currentIndex];
-            _currentIndex = (_currentIndex + 1) % activeServers.Count;
+            string selectedServer;
+            
+            lock (_lock)
+            {
+                selectedServer = activeServers[_currentIndex];
+                _currentIndex = (_currentIndex + 1) % activeServers.Count;
+            }
 
             return selectedServer;
         }
